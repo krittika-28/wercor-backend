@@ -16,7 +16,8 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'http://localhost:3001',
-    process.env.FRONTEND_URL
+    process.env.FRONTEND_URL,
+    'https://wercor-frontend.vercel.app'
   ],
   credentials: true
 }));

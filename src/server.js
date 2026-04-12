@@ -9,7 +9,7 @@ const categoryRoutes = require('./routes/categories');
 const locationRoutes = require('./routes/locations');
 
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors({

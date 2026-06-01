@@ -1,5 +1,6 @@
 const pool = require('../config/database');
 const { sendAgencySubmissionEmail } = require('../utils/sendMail');
+const { processLogo } = require('../middleware/upload');
 
 // Get all agencies with filters
 const getAgencies = async (req, res) => {
@@ -130,12 +131,28 @@ const getAgency = async (req, res) => {
 // Create new agency
 const createAgency = async (req, res) => {
   try {
-    const { 
-      name, slug, description, website, email, phone, 
+    const {
+      name, slug, description, website, email, phone,
       address, city_id, country_id, categories,
       founded_year, team_size, min_project_size, hourly_rate,
-      logo_url, screenshot_url
+      screenshot_url
     } = req.body;
+
+    // Process logo if uploaded
+    let logo_url = null;
+    if (req.file) {
+      logo_url = await processLogo(req.file);
+    }
+
+    // Parse categories
+    let categoryList = categories;
+    if (typeof categories === 'string') {
+      try {
+        categoryList = JSON.parse(categories);
+      } catch (e) {
+        categoryList = [];
+      }
+    }
 
     const result = await pool.query(
       `INSERT INTO agencies (
@@ -154,8 +171,9 @@ const createAgency = async (req, res) => {
 
     const agency = result.rows[0];
 
-    if (categories && categories.length > 0) {
-      for (const categoryId of categories) {
+    // Insert categories
+    if (categoryList && categoryList.length > 0) {
+      for (const categoryId of categoryList) {
         await pool.query(
           'INSERT INTO agency_categories (agency_id, category_id) VALUES ($1, $2)',
           [agency.id, categoryId]
@@ -163,7 +181,7 @@ const createAgency = async (req, res) => {
       }
     }
 
-    // ✅ Send Mailjet notification to hello@zaapr.com
+    // Send email notification
     try {
       const [countryRes, cityRes, catRes] = await Promise.all([
         country_id
@@ -172,8 +190,8 @@ const createAgency = async (req, res) => {
         city_id
           ? pool.query('SELECT name FROM cities WHERE id = $1', [city_id])
           : Promise.resolve({ rows: [] }),
-        categories && categories.length > 0
-          ? pool.query('SELECT name FROM categories WHERE id = ANY($1::int[])', [categories])
+        categoryList && categoryList.length > 0
+          ? pool.query('SELECT name FROM categories WHERE id = ANY($1::int[])', [categoryList])
           : Promise.resolve({ rows: [] })
       ]);
 
@@ -193,6 +211,7 @@ const createAgency = async (req, res) => {
 
     res.status(201).json(agency);
   } catch (error) {
+    console.error('Error creating agency:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -205,8 +224,14 @@ const updateAgency = async (req, res) => {
       name, slug, description, website, email, phone,
       address, city_id, country_id, categories,
       founded_year, team_size, min_project_size, hourly_rate,
-      logo_url, screenshot_url, is_verified, is_featured
+      screenshot_url, is_verified, is_featured
     } = req.body;
+
+    // Process logo if uploaded
+    let logo_url = req.body.logo_url;
+    if (req.file) {
+      logo_url = await processLogo(req.file);
+    }
 
     const result = await pool.query(
       `UPDATE agencies SET
